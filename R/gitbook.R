@@ -15,9 +15,19 @@ gitbook = function(
   split_bib = TRUE, config = list()
 ) {
   html_document2 = function(..., extra_dependencies = list()) {
+    customBootDS <- list(htmltools::htmlDependency(
+      'bootstrap', '0.0.0', src = bookdown_file('resources','bootstrap'),
+      stylesheet = file.path(c(
+        'bootstrap.min.css'
+      )),
+      script = file.path(c(
+        'bootstrap.min.js'
+      ))
+    ))
+
     rmarkdown::html_document(
-      ..., extra_dependencies = c(extra_dependencies, gitbook_dependency())
-    )
+      ..., extra_dependencies = c(extra_dependencies, gitbook_dependency(), customBootDS
+    ))
   }
   gb_config = config
   config = html_document2(
