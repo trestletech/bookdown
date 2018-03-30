@@ -1,8 +1,50 @@
-# CHANGES IN bookdown VERSION 0.5 (unreleased)
+# CHANGES IN bookdown VERSION 0.8
+
+## NEW FEATURE
+
+- Added Conjecture to the list of theorem environments.
+
+# CHANGES IN bookdown VERSION 0.7
+
+## MINOR CHANGES
+
+- Added a new dependency **tinytex** to build PDF, and **xfun** for some utility functions.
+
+- Added the ability to share documents on LinkedIn with the `gitbook` output format (thanks, @WeeBeasties, #523, https://stackoverflow.com/q/48494097/559676).
+
+# CHANGES IN bookdown VERSION 0.6
+
+## NEW FEATURES
+
+- Added an argument `config_file` to `render_book()` so that one can specify a custom config file; the default config file is still `_bookdown.yml` (thanks, @stephlocke, #465).
+
+- Added a global option `bookdown.preview.cutoff` (defaults to 30) for the preview mode `render_book(preview = TRUE)`: when the number of lines of a chapter is smaller or equal to this number, the full chapter is included in the preview; otherwise, only the section titles are extracted from the chapter for preview.
+
+## BUG FIXES
+
+- Various compatibility issues with Pandoc 2.0 (thanks, @maxheld83 #479, @jerrythomas #481, @Hantabaru #483, @dataopt #504, and #478).
+
+- `split_by = 'section'` does not work completely correctly for the HTML output formats like `gitbook` (thanks, @dataopt, #502).
+
+# CHANGES IN bookdown VERSION 0.5
+
+## NEW FEATURES
+
+- Added support for two more environments: Exercises and Solutions (thanks, @dshuman1, #423).
+
+- If the Rmd file merged from all chapters exists and you are sure it can be safely deleted, you can set an option `delete_merged_file` to `true` in `_bookdown.yml` (thanks, @dmenne, #442).
 
 ## BUG FIXES
 
 - The book cannot be properly rendered when the option `book_filename` in `_bookdown.yml` contains a dot (thanks, @pinusm, #410).
+
+- Proof and Remark blocks do not work well for EPUB output (thanks, @mamaciasq, #443).
+
+- When `split_by = 'section'` for the `gitbook` output format, navigation buttons are missing on the page before the appendix (thanks, @dataopt, #409).
+
+## MINOR CHANGES
+
+- The label prefix for Example blocks was changed from `ex:` to `exm:`.
 
 # CHANGES IN bookdown VERSION 0.4
 

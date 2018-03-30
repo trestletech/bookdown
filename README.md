@@ -1,6 +1,8 @@
 # bookdown
 
-[![Build Status](https://travis-ci.org/rstudio/bookdown.svg)](https://travis-ci.org/rstudio/bookdown) ![CRAN downloads](http://cranlogs.r-pkg.org/badges/grand-total/bookdown)
+[![Build Status](https://travis-ci.org/rstudio/bookdown.svg)](https://travis-ci.org/rstudio/bookdown) ![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/bookdown)
+
+<a href="https://bookdown.org/yihui/blogdown"><img src="https://bookdown.org/yihui/bookdown/images/logo.png" alt="bookdown logo" align="right" /></a>
 
 A open-source (GPL-3) R package to facilitate writing books and long-form articles/reports with R Markdown. Features include:
 

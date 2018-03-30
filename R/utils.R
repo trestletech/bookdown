@@ -11,20 +11,6 @@ next_nearest = function(x, y, allow_eq = FALSE) {
   z
 }
 
-# change the filename extension
-with_ext = function(x, ext) {
-  n1 = length(x); n2 = length(ext); r = '([.][[:alnum:]]+)?$'
-  if (n1 * n2 == 0) return(x)
-  i = !(grepl('^[.]', ext) | ext == '')
-  ext[i] = paste0('.', ext[i])
-
-  if (all(ext == '')) ext = ''
-  if (length(ext) == 1) return(sub(r, ext, x))
-
-  if (n1 > 1 && n1 != n2) stop("'ext' must be of the same length as 'x'")
-  mapply(sub, r, ext, x, USE.NAMES = FALSE)
-}
-
 # counters for figures/tables
 new_counters = function(type, rownames) {
   base = matrix(
@@ -46,26 +32,6 @@ set_opts_knit = function(config) {
   # http://tex.stackexchange.com/q/276699/9128
   config$knitr$opts_knit$kable.force.latex = TRUE
   config
-}
-
-readUTF8 = function(input) {
-  x = readLines(input, encoding = 'UTF-8', warn = FALSE)
-  i = invalidUTF8(x)
-  n = length(i)
-  if (n > 0) warning(
-    'The file ', input, ' is not encoded in UTF-8. These lines contain invalid ',
-    'UTF-8 characters: ', paste(c(head(i), if (n > 6) '...'), collapse = ', ')
-  )
-  x
-}
-
-writeUTF8 = function(text, ...) {
-  writeLines(enc2utf8(text), ..., useBytes = TRUE)
-}
-
-# which lines are invalid UTF-8
-invalidUTF8 = function(x) {
-  which(is.na(iconv(x, 'UTF-8', 'UTF-8')))
 }
 
 get_base_format = function(format) {
@@ -118,7 +84,7 @@ output_dirname = function(dir, config = load_config(), create = TRUE) {
   if (length(dir)) {
     if (create) dir_create(dir)
     # ignore dir that is just the current working directory
-    if (same_path(dir, getwd(), mustWork = FALSE)) dir = NULL
+    if (same_path(dir, getwd())) dir = NULL
   }
   dir
 }
@@ -142,16 +108,18 @@ merge_chapters = function(files, to, before = NULL, after = NULL, orig = files) 
   # in the preview mode, only use some placeholder text instead of the full Rmd
   preview = opts$get('preview'); input = opts$get('input_rmd')
   content = unlist(mapply(files, orig, SIMPLIFY = FALSE, FUN = function(f, o) {
-    x = readUTF8(f)
+    x = read_utf8(f)
+    # if a chapter is short enough (<= 30 lines), just include the full chapter for preview
+    preview = preview && length(x) >= getOption('bookdown.preview.cutoff', 30)
     x = if (preview && !(o %in% input)) create_placeholder(x) else {
       insert_code_chunk(x, before, after)
     }
     c(x, '', paste0('<!--chapter:end:', o, '-->'), '')
   }))
   if (preview && !(files[1] %in% input))
-    content = c(fetch_yaml(readUTF8(files[1])), content)
+    content = c(fetch_yaml(read_utf8(files[1])), content)
   unlink(to)
-  writeUTF8(content, to)
+  write_utf8(content, to)
   Sys.chmod(to, '644')
 }
 
@@ -159,9 +127,19 @@ match_dashes = function(x) grep('^---\\s*$', x)
 
 create_placeholder = function(x) {
   h = grep('^# ', x, value = TRUE)  # chapter title
-  h1 = grep(reg_part, h, value = TRUE)
-  h2 = setdiff(h, h1)
-  c('', if (length(h1)) h1[1], if (length(h2)) h2[1] else '# Placeholder')
+  h1 = grep(reg_part, h, value = TRUE)  # part title
+  h2 = grep(reg_app, h, value = TRUE)   # appendix title
+  h3 = setdiff(h, c(h1, h2))
+  h4 = grep('^#{2,} ', x, value = TRUE)  # section/subsection/... titles
+  c(
+    '', placeholder(head(h1, 1)), placeholder(head(h2, 1)),
+    placeholder(h3[1]), '', h4
+  )
+}
+
+# x1: the title; x2: placeholder if title is empty
+placeholder = function(x1, x2 = NULL) {
+  if (length(x1) && !is.na(x1)) c(x1, '\nPlaceholder\n') else x2
 }
 
 fetch_yaml = function(x) {
@@ -184,12 +162,12 @@ insert_code_chunk = function(x, before, after) {
 insert_chapter_script = function(config, where = 'before') {
   script = config[[sprintf('%s_chapter_script', where)]]
   if (is.character(script)) {
-    c('```{r include=FALSE, cache=FALSE}', unlist(lapply(script, readUTF8)), '```')
+    c('```{r include=FALSE, cache=FALSE}', unlist(lapply(script, read_utf8)), '```')
   }
 }
 
 check_special_chars = function(filename) {
-  reg = getFromNamespace('.shell_chars_regex', 'rmarkdown')
+  reg = rmarkdown:::.shell_chars_regex
   for (i in grep(reg, filename)) warning(
     'The filename "', filename[i], '" contains special characters. ',
     'You may rename it to, e.g., "', gsub(reg, '-', filename[i]), '".'
@@ -198,8 +176,9 @@ check_special_chars = function(filename) {
   filename
 }
 
-Rscript = function(args) {
-  system2(file.path(R.home('bin'), 'Rscript'), args)
+# TODO: use xfun::Rscript
+Rscript = function(args, ...) {
+  system2(file.path(R.home('bin'), 'Rscript'), args, ...)
 }
 
 Rscript_render = function(file, ...) {
@@ -218,6 +197,7 @@ clean_meta = function(meta_file, files) {
 
 # remove HTML tags and remove extra spaces
 strip_html = function(x) {
+  x = gsub('<!--.*?-->', '', x)  # remove comments
   x = gsub('<[^>]+>', '', x)
   x = gsub('\\s{2,}', ' ', x)
   x
@@ -229,11 +209,6 @@ strip_search_text = function(x) {
   x = gsub('<div id="refs" class="references">.*', '', x)
   x = strip_html(x)
   x
-}
-
-# quote a string and escape backslashes/double quotes
-json_string = function(x, toArray = FALSE) {
-  knitr:::json_vector(x, toArray)
 }
 
 # manipulate internal options
@@ -294,11 +269,7 @@ serve_book = function(
   # when this function is called via the RStudio addin, use the dir of the
   # current active document
   if (missing(dir) && requireNamespace('rstudioapi', quietly = TRUE)) {
-    context_fun = tryCatch(
-      getFromNamespace('getSourceEditorContext', 'rstudioapi'),
-      error = function(e) rstudioapi::getActiveDocumentContext
-    )
-    path = context_fun()[['path']]
+    path = rstudioapi::getSourceEditorContext()[['path']]
     if (!(is.null(path) || path == '')) dir = dirname(path)
   }
   owd = setwd(dir); on.exit(setwd(owd), add = TRUE)
@@ -341,17 +312,9 @@ first_html_format = function() {
   if (length(formats) == 0) fallback else formats[1]
 }
 
-sans_ext = knitr:::sans_ext
-
-same_path = function(f1, f2, ...) {
-  normalizePath(f1, ...) == normalizePath(f2, ...)
-}
-
-in_dir = knitr:::in_dir
-
 # base64 encode resources in url("")
 base64_css = function(css, exts = 'png', overwrite = FALSE) {
-  x = readUTF8(css)
+  x = read_utf8(css)
   r = sprintf('[.](%s)$', paste(exts, collapse = '|'))
   m = gregexpr('url\\("[^"]+"\\)', x)
   regmatches(x, m) = lapply(regmatches(x, m), function(ps) {
@@ -361,7 +324,7 @@ base64_css = function(css, exts = 'png', overwrite = FALSE) {
       if (grepl(r, p) && file.exists(p)) knitr::image_uri(p) else p
     }))
   })
-  if (overwrite) writeUTF8(x, css) else x
+  if (overwrite) write_utf8(x, css) else x
 }
 
 files_cache_dirs = function(dir = '.') {
@@ -414,6 +377,8 @@ str_trim = function(x) gsub('^\\s+|\\s+$', '', x)
 
 `%n%` = knitr:::`%n%`
 
+output_md = function() getOption('bookdown.output.markdown', FALSE)
+
 # a theorem engine for knitr (can also be used for lemmas, definitions, etc)
 eng_theorem = function(options) {
   type = options$type %n% 'theorem'
@@ -422,16 +387,20 @@ eng_theorem = function(options) {
   )
   options$type = type
   label = paste(theorem_abbr[type], options$label, sep = ':')
-  html.before2 = sprintf('(\\#%s)', label)
-  name = options$name
+  html.before2 = sprintf('(\\#%s) ', label)
+  name = options$name; to_md = output_md()
   if (length(name) == 1) {
-    options$latex.options = sprintf('[%s]', name)
-    html.before2 = paste(html.before2, sprintf('\\iffalse (%s) \\fi{} ', name))
+    if (to_md) {
+      html.before2 = paste(html.before2, sprintf('(%s) ', name))
+    } else {
+      options$latex.options = sprintf('[%s]', name)
+      html.before2 = paste(html.before2, sprintf('\\iffalse (%s) \\fi{} ', name))
+    }
   }
   options$html.before2 = sprintf(
     '<span class="%s" id="%s"><strong>%s</strong></span>', type, label, html.before2
   )
-  knitr:::eng_block2(options)
+  process_block(options, to_md)
 }
 
 # a proof engine for unnumbered math environments
@@ -442,9 +411,9 @@ eng_proof = function(options) {
   )
   options$type = type
   label = label_prefix(type, label_names_math2)
-  name = options$name
+  name = options$name; to_md = output_md()
   if (length(name) == 1) {
-    options$latex.options = sprintf('[%s]', sub('[.]\\s*$', '', name))
+    if (!to_md) options$latex.options = sprintf('[%s]', sub('[.]\\s*$', '', name))
     r = '^(.+?)([[:punct:][:space:]]+)$'  # "Remark. " -> "Remark (Name). "
     if (grepl(r, label)) {
       label1 = gsub(r, '\\1', label)
@@ -457,8 +426,20 @@ eng_proof = function(options) {
     label = sprintf('<em>%s</em>', label)
   }
   options$html.before2 = sprintf(
-    '\\iffalse <span class="%s">%s</span> \\fi{} ', type, label
+    '<span class="%s">%s</span> ', type, label
   )
+  if (!to_md) options$html.before2 = paste('\\iffalse{}', options$html.before2, '\\fi{}')
+  process_block(options, to_md)
+}
+
+process_block = function(options, md) {
+  if (md) {
+    code = options$code
+    code = knitr:::pandoc_fragment(code)
+    r = '^<p>(.+)</p>$'
+    if (length(code) > 0 && grepl(r, code[1])) code[1] = gsub(r, '\\1', code[1])
+    options$code = code
+  }
   knitr:::eng_block2(options)
 }
 
@@ -470,3 +451,5 @@ register_eng_math = function(envs, engine) {
     }
   }), envs))
 }
+
+pandoc2.0 = function() rmarkdown::pandoc_available('2.0')

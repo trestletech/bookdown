@@ -7,10 +7,13 @@ exclude_urls = readLines('exclude.txt')
 pinned_urls = c(
   "https://bookdown.org/yihui/bookdown/",
   "http://r4ds.had.co.nz/",
+  "http://adv-r.hadley.nz/",
   "https://bookdown.org/rdpeng/rprogdatascience/",
   "http://tidytextmining.com/",
   "https://bookdown.org/rdpeng/exdata/",
-  "https://bookdown.org/csgillespie/efficientR/"
+  "https://bookdown.org/csgillespie/efficientR/",
+  "https://otexts.org/fpp2/",
+  "https://bookdown.org/yihui/blogdown/"
 )
 
 book_listing = function() {
@@ -92,7 +95,7 @@ book_listing = function() {
       coverDiv <- div(class = "bookImage",
                       style = paste0("background-image:url(", cover ,")"))
     } else {
-      coverDiv <- div(class=paste("bookImage", next_color_class()),
+      coverDiv <- div(class = paste("bookImage", next_color_class()),
                       div(class = "title", title),
                       div(class = "author", author))
     }

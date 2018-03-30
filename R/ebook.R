@@ -37,11 +37,10 @@ epub_book = function(
   )
   if (is.null(stylesheet)) css = NULL else {
     css = rmarkdown::pandoc_path_arg(epub_css(stylesheet))
-    args = c(args, '--epub-stylesheet', css)
+    args = c(args, if (pandoc2.0()) '--css' else '--epub-stylesheet', css)
   }
 
-  from_rmarkdown = getFromNamespace('from_rmarkdown', 'rmarkdown')
-  from = from_rmarkdown(fig_caption, md_extensions)
+  from = rmarkdown::from_rmarkdown(fig_caption, md_extensions)
 
   config = rmarkdown::output_format(
     knitr = rmarkdown::knitr_options_html(fig_width, fig_height, NULL, FALSE, dev),
@@ -67,27 +66,34 @@ move_output = function(output) {
   output2
 }
 
-process_markdown = function(input_file, from, pandoc_args, global) {
+process_markdown = function(input_file, from, pandoc_args, global, to_md = output_md()) {
   intermediate_html = with_ext(input_file, 'tmp.html')
   on.exit(unlink(intermediate_html), add = TRUE)
   rmarkdown::pandoc_convert(
     input_file, 'html', from, intermediate_html, TRUE,
     c(pandoc_args, '--section-divs', '--mathjax', '--number-sections')
   )
-  x = readUTF8(intermediate_html)
+  x = read_utf8(intermediate_html)
   figs = parse_fig_labels(x, global)
   # resolve cross-references and update the Markdown input file
   content = resolve_refs_md(
-    readUTF8(input_file), c(figs$ref_table, parse_section_labels(x))
+    read_utf8(input_file), c(figs$ref_table, parse_section_labels(x)), to_md
   )
-  content = resolve_ref_links_epub(content)
-  content = restore_part_epub(content)
-  content = restore_appendix_epub(content)
-  content = protect_math_env(content)
-  writeUTF8(content, input_file)
+  if (to_md) content = gsub(
+    '^\\\\BeginKnitrBlock\\{[^}]+\\}|\\\\EndKnitrBlock\\{[^}]+\\}$', '', content
+  )
+  content = resolve_ref_links_epub(
+    content, parse_ref_links(x, '^<p>%s (.+)</p>$'), to_md
+  )
+  if (!to_md) {
+    content = restore_part_epub(content)
+    content = restore_appendix_epub(content)
+    content = protect_math_env(content)
+  }
+  write_utf8(content, input_file)
 }
 
-resolve_refs_md = function(content, ref_table) {
+resolve_refs_md = function(content, ref_table, to_md = output_md()) {
   ids = names(ref_table)
   # replace (\#fig:label) with Figure x.x:
   for (i in grep('^(<p class="caption|<caption>|Table:|\\\\BeginKnitrBlock)|(!\\[.*?\\]\\(.+?\\))', content)) {
@@ -111,7 +117,7 @@ resolve_refs_md = function(content, ref_table) {
   # remove labels in figure alt text (it will contain \ like (\#fig:label))
   content = gsub('"\\(\\\\#(fig:[-[:alnum:]]+)\\)', '"', content)
   # replace (\#eq:label) with equation numbers
-  content = add_eq_numbers(content, ids, ref_table)
+  content = add_eq_numbers(content, ids, ref_table, to_md)
 
   # look for \@ref(label) and resolve to actual figure/table/section numbers
   m = gregexpr('(?<!`)\\\\@ref\\(([-:[:alnum:]]+)\\)', content, perl = TRUE)
@@ -121,7 +127,7 @@ resolve_refs_md = function(content, ref_table) {
 }
 
 # change labels (\#eq:label) in math environments into actual numbers in \tag{}
-add_eq_numbers = function(x, ids, ref_table) {
+add_eq_numbers = function(x, ids, ref_table, to_md = output_md()) {
   ids = grep('^eq:', ids, value = TRUE)
   if (length(ids) == 0) return(x)
   ref_table = ref_table[ids]
@@ -138,8 +144,11 @@ add_eq_numbers = function(x, ids, ref_table) {
       m = sprintf('\\(\\\\#%s\\)', j)
       if (grepl(m, x[i])) {
         # it is weird that \tag{} does not work in iBooks, so I have to cheat by
-        # using \qquad then the (equation number)
-        x[i] = sub(m, sprintf('\\\\qquad(%s)', ref_table[j]), x[i])
+        # using \qquad then the (equation number); however, when the output
+        # format is Markdown instead of EPUB, I'll still use \tag{}
+        x[i] = sub(m, sprintf(
+          if (to_md) '\\\\tag{%s}' else '\\\\qquad(%s)', ref_table[j]
+        ), x[i])
         break
       }
     }
@@ -147,9 +156,15 @@ add_eq_numbers = function(x, ids, ref_table) {
   x
 }
 
-resolve_ref_links_epub = function(x) {
+# replace text references (ref:label); note refs is the parsed text references
+# from the HTML output of Markdown, i.e. Markdown has been translated to HTML
+resolve_ref_links_epub = function(x, refs, to_md = output_md()) {
   res = parse_ref_links(x, '^%s (.+[^ ])$')
   if (is.null(res)) return(x)
+  if (to_md && length(refs$tags)) {
+    i = match(res$tags, refs$tags)
+    res$txts[!is.na(i)] = na.omit(refs$txts[i])
+  }
   restore_ref_links(res$content, '(?<!`)%s', res$tags, res$txts, TRUE)
 }
 
@@ -161,14 +176,14 @@ restore_part_epub = function(x) {
   x
 }
 
+reg_app = '^(# )\\(APPENDIX\\) (.+ \\{-\\})$'
 # this is not good enough since appendix chapters will continue to be numbered
 # after the last chapter instead of being numbered differently like A.1, A.2,
 # ..., but probably not too many people care about it in e-books
 restore_appendix_epub = function(x) {
-  r = '^(# )\\(APPENDIX\\) (.+ \\{-\\})$'
-  i = find_appendix_line(r, x)
+  i = find_appendix_line(reg_app, x)
   if (length(i) == 0) return(x)
-  x[i] = gsub(r, '\\1\\2', x[i])
+  x[i] = gsub(reg_app, '\\1\\2', x[i])
   x
 }
 
@@ -197,7 +212,7 @@ epub_css = function(files, output = tempfile('epub', fileext = '.css')) {
   css = unlist(lapply(files, function(css) {
     in_dir(dirname(css), base64_css(basename(css)))
   }))
-  writeUTF8(css, output)
+  write_utf8(css, output)
   output
 }
 

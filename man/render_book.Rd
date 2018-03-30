@@ -7,7 +7,7 @@
 \usage{
 render_book(input, output_format = NULL, ..., clean = TRUE, envir = parent.frame(), 
     clean_envir = !interactive(), output_dir = NULL, new_session = NA, preview = FALSE, 
-    encoding = "UTF-8")
+    encoding = "UTF-8", config_file = "_bookdown.yml")
 
 preview_chapter(..., envir = parent.frame())
 }
@@ -41,6 +41,8 @@ accurate (e.g. cross-references to other chapters will not work).}
 
 \item{encoding}{Ignored. The character encoding of all input files is
 supposed to be UTF-8.}
+
+\item{config_file}{The book configuration file.}
 }
 \description{
 Render multiple R Markdown files under the current working directory into a
@@ -53,4 +55,8 @@ There are two ways to render a book from Rmd files. The default way
 (\code{new_session = FALSE}) is to merge Rmd files into a single file and
 render this file. You can also choose to render each individual Rmd file in a
 new R session (\code{new_session = TRUE}).
+}
+\examples{
+# see https://bookdown.org/yihui/bookdown for the full documentation
+if (file.exists("index.Rmd")) bookdown::render_book("index.Rmd")
 }

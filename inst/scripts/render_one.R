@@ -1,12 +1,13 @@
 # compile an Rmd file without running Pandoc; arguments are passed from Rscript;
 # the three arguments are 1) the Rmd filename; 2) the render arguments; 3) the
 # filename to save the returned value of render()
+library(methods)
 local({
   args = commandArgs(TRUE)
   out = do.call(
     rmarkdown::render, c(args[1], readRDS(args[2]), list(run_pandoc = FALSE, encoding = 'UTF-8'))
   )
-  out_expected = bookdown:::with_ext(args[1], '.md')
+  out_expected = xfun::with_ext(args[1], '.md')
   if (out != out_expected) {
     file.rename(out, out_expected)
     attributes(out_expected) = attributes(out)

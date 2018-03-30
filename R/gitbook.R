@@ -3,14 +3,15 @@
 #' This output format function ported a style provided by GitBook
 #' (\url{https://www.gitbook.com}) for R Markdown.
 #' @inheritParams html_chapters
-#' @param fig_caption,number_sections,self_contained,lib_dir,... Arguments to be
-#'   passed to \code{rmarkdown::\link{html_document}()} (\code{...} not
-#'   including \code{toc}, \code{theme}, and \code{template}).
+#' @param fig_caption,number_sections,self_contained,lib_dir,pandoc_args ...
+#'   Arguments to be passed to \code{rmarkdown::\link{html_document}()}
+#'   (\code{...} not including \code{toc}, \code{theme}, and \code{template}).
 #' @param config A list of configuration options for the gitbook style, such as
 #'   the font/theme settings.
 #' @export
 gitbook = function(
-  fig_caption = TRUE, number_sections = TRUE, self_contained = FALSE, lib_dir = 'libs', ...,
+  fig_caption = TRUE, number_sections = TRUE, self_contained = FALSE,
+  lib_dir = 'libs', pandoc_args = NULL, ...,
   split_by = c('chapter', 'chapter+number', 'section', 'section+number', 'rmd', 'none'),
   split_bib = TRUE, config = list()
 ) {
@@ -33,7 +34,8 @@ gitbook = function(
   config = html_document2(
     toc = TRUE, number_sections = number_sections, fig_caption = fig_caption,
     self_contained = self_contained, lib_dir = lib_dir, theme = NULL,
-    template = bookdown_file('templates', 'gitbook.html'), ...
+    template = bookdown_file('templates', 'gitbook.html'),
+    pandoc_args = pandoc_args2(pandoc_args), ...
   )
   split_by = match.arg(split_by)
   post = config$post_processor  # in case a post processor have been defined
@@ -66,9 +68,9 @@ write_search_data = function(x) {
   if (length(x) == 0) return()
   gitbook_search$empty()
   x = matrix(strip_search_text(x), nrow = 3)
-  x = apply(x, 2, json_string, toArray = TRUE)
+  x = apply(x, 2, xfun::json_vector, to_array = TRUE)
   x = paste0('[\n', paste0(x, collapse = ',\n'), '\n]')
-  writeUTF8(x, output_path('search_index.json'))
+  write_utf8(x, output_path('search_index.json'))
 }
 
 gitbook_dependency = function() {
@@ -206,8 +208,8 @@ gitbook_config = function(config = list()) {
   default = list(
     sharing = list(
       github = FALSE, facebook = TRUE, twitter = TRUE, google = FALSE,
-      weibo = FALSE, instapper = FALSE, vk = FALSE,
-      all = c('facebook', 'google', 'twitter', 'weibo', 'instapaper')
+      linkedin = FALSE, weibo = FALSE, instapper = FALSE, vk = FALSE,
+      all = c('facebook', 'google', 'twitter', 'linkedin', 'weibo', 'instapaper')
     ),
     fontsettings = list(theme = 'white', family = 'sans', size = 2),
     edit = list(link = NULL, text = NULL),
@@ -218,7 +220,7 @@ gitbook_config = function(config = list()) {
   config = utils::modifyList(default, config, keep.null = TRUE)
   # remove these TOC config items since we don't need them in JavaScript
   config$toc$before = NULL; config$toc$after = NULL
-  config = sprintf('gitbook.start(%s);', knitr:::tojson(config))
+  config = sprintf('gitbook.start(%s);', xfun::tojson(config))
   paste(
     '<script>', 'gitbook.require(["gitbook"], function(gitbook) {', config, '});',
     '</script>', sep = '\n'
